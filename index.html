@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aramega · Daily Quantity Limit Tracker</title>
+<meta name="description" content="Daily production capacity tracker for the Aramega order book — 400 PCS per day.">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo-slot" id="logoSlot"></span>
+    <span class="brand-text">
+      <strong>Daily Quantity Limit Tracker</strong>
+      <small>Order book capacity planner</small>
+    </span>
+  </div>
+  <div class="topbar-actions">
+    <span class="limit-chip" id="limitChip">400 PCS / day</span>
+    <button class="btn ghost" id="themeBtn" title="Switch light / dark">◐</button>
+    <button class="btn ghost" id="importBtn">Update data</button>
+    <button class="btn ghost" id="settingsBtn">Settings</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="panel calendar-panel">
+    <div class="panel-head">
+      <div class="cal-nav">
+        <button class="btn icon" id="prevMonth" aria-label="Previous month">‹</button>
+        <h2 id="monthLabel">—</h2>
+        <button class="btn icon" id="nextMonth" aria-label="Next month">›</button>
+        <button class="btn ghost sm" id="todayBtn">Today</button>
+      </div>
+      <div class="legend">
+        <span><i class="sw free"></i>Light</span>
+        <span><i class="sw ok"></i>Healthy</span>
+        <span><i class="sw tight"></i>Near limit</span>
+        <span><i class="sw over"></i>Over limit</span>
+      </div>
+    </div>
+    <div class="weekhead" id="weekHead"></div>
+    <div class="calendar" id="calendar"></div>
+    <div class="panel-foot">
+      <span id="monthSummary" class="muted"></span>
+      <button class="btn ghost sm" id="exportBtn">Export month CSV</button>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="panel checker">
+      <div class="panel-head"><h2>Can we take this order?</h2></div>
+      <div class="checker-form">
+        <label>Quantity (PCS)
+          <input type="number" id="chkQty" min="1" step="1" placeholder="e.g. 120">
+        </label>
+        <label>Due date <span class="muted sm-note">blank = <span id="leadNote">7</span> days</span>
+          <input type="date" id="chkDue">
+        </label>
+        <button class="btn primary" id="chkRun">Check capacity</button>
+      </div>
+      <div id="chkResult" class="chk-result"></div>
+    </section>
+
+    <section class="panel day-panel">
+      <div class="panel-head"><h2 id="dayTitle">Select a day</h2></div>
+      <div id="dayBody" class="day-body">
+        <p class="empty">Click any day in the calendar to see the jobs due that day.</p>
+      </div>
+    </section>
+  </aside>
+
+</main>
+
+<footer class="footbar">
+  <span id="dataNote" class="muted"></span>
+  <a class="muted link" id="sheetLink" href="#" target="_blank" rel="noopener">Open Google Sheet ↗</a>
+</footer>
+
+<!-- Import dialog -->
+<div class="modal" id="importModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><h3>Update from the order book</h3><button class="btn icon" data-close>✕</button></div>
+    <div class="modal-body">
+      <p class="muted">In Google Sheets select the order rows (columns <b>A</b> to <b>H</b> or the whole row), copy, and paste below. Column <b>A</b> = order date, <b>E</b> = PCS, <b>H</b> = due date.</p>
+      <textarea id="pasteBox" rows="9" placeholder="3-Aug	A	SN	JERSEY AMIR KHUSYAIRI	56	CT	12769	9/8"></textarea>
+      <div class="row">
+        <label class="file-label">Or upload CSV / TSV<input type="file" id="fileInput" accept=".csv,.tsv,.txt"></label>
+        <label class="check"><input type="checkbox" id="appendMode"> Add to existing data instead of replacing</label>
+      </div>
+      <div id="importPreview" class="import-preview"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="resetData">Restore bundled snapshot</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="applyImport">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings dialog -->
+<div class="modal" id="settingsModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><h3>Settings</h3><button class="btn icon" data-close>✕</button></div>
+    <div class="modal-body">
+      <label>Daily limit (PCS)<input type="number" id="setLimit" min="1" step="10"></label>
+      <label>Lead time when no due date (days)<input type="number" id="setLead" min="0" step="1"></label>
+      <label>Rest day (excluded when suggesting dates)
+        <select id="setRest">
+          <option value="">None — we run every day</option>
+          <option value="0">Sunday</option><option value="1">Monday</option>
+          <option value="2">Tuesday</option><option value="3">Wednesday</option>
+          <option value="4">Thursday</option><option value="5">Friday</option>
+          <option value="6">Saturday</option>
+        </select>
+      </label>
+      <label>Logo image URL<input type="url" id="setLogo" placeholder="https://www.aramega.com.my/…/logo.png"></label>
+      <p class="muted sm-note">Paste the direct image link to your Aramega logo to show it in the header.</p>
+      <div id="provList" class="prov-list"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>Close</button>
+      <button class="btn primary" id="saveSettings">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="data/orders.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
