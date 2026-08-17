@@ -19,6 +19,9 @@
   </div>
   <div class="topbar-actions">
     <span class="limit-chip" id="limitChip">400 PCS / day</span>
+    <button class="btn ghost" id="refreshBtn" title="Reload the order data">
+      <span class="rot" id="refreshIcon">⟳</span> Refresh
+    </button>
     <button class="btn ghost" id="themeBtn" title="Switch light / dark">◐</button>
     <button class="btn ghost" id="importBtn">Update data</button>
     <button class="btn ghost" id="settingsBtn">Settings</button>
@@ -82,6 +85,8 @@
   <a class="muted link" id="sheetLink" href="#" target="_blank" rel="noopener">Open Google Sheet ↗</a>
 </footer>
 
+<div class="toast" id="toast" hidden></div>
+
 <!-- Import dialog -->
 <div class="modal" id="importModal" hidden>
   <div class="modal-card">
@@ -120,6 +125,10 @@
           <option value="6">Saturday</option>
         </select>
       </label>
+      <label>Live sheet CSV link<input type="url" id="setCsv" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=0&amp;single=true&amp;output=csv"></label>
+      <p class="muted sm-note">Optional. In the order book: <b>File → Share → Publish to web</b>, pick the month's tab,
+        choose <b>Comma-separated values (.csv)</b>, and paste the link here. Refresh then pulls the latest rows straight
+        from the sheet.</p>
       <label>Logo image URL<input type="url" id="setLogo" placeholder="https://www.aramega.com.my/…/logo.png"></label>
       <p class="muted sm-note">Paste the direct image link to your Aramega logo to show it in the header.</p>
       <div id="provList" class="prov-list"></div>

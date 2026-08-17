@@ -27,6 +27,10 @@ The lead time and the daily limit are both editable in Settings.
   answers yes/no, names the earliest day the order fits whole, and proposes a split
   across the free capacity before the due date. The order can be pinned to the calendar
   as a *provisional* booking while the customer decides.
+* **Refresh** — recomputes everything against the current date, and pulls the latest rows
+  straight from the sheet when a published CSV link is set (Settings → Live sheet CSV link;
+  in Sheets: *File → Share → Publish to web*, pick the month's tab, choose CSV). Incoming
+  rows replace only the dates they cover, so earlier months stay intact.
 * **Update data** — paste rows copied straight out of Google Sheets (or upload a CSV/TSV
   export) to refresh the numbers; kept in the browser's local storage.
 * **Export month CSV** — the day-by-day load for the month on screen.
@@ -87,3 +91,7 @@ A published copy lives at <https://claude.ai/code/artifact/db11c85a-d0e0-4495-b7
 (private to the account that published it until shared). Rebuild it with
 `python3 tools/build_artifact.py`; `python3 tools/build_single.py` produces a
 standalone `dist/tracker.html` that runs from anywhere.
+
+The hosted copy blocks outbound requests, so the live CSV link works in the self-hosted
+version (GitHub Pages, a local server, `dist/tracker.html`); on the hosted copy, Refresh
+recomputes the day and **Update data** takes a paste.

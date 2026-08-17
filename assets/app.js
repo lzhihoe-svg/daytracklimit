@@ -10,7 +10,7 @@
 
   var STORE_KEY = 'aramega-dlt-v1';
   var BUNDLED = window.ARAMEGA_ORDERBOOK || { orders: [], source: 'empty' };
-  var DEFAULTS = { limit: 400, lead: 7, rest: '', logo: '' };
+  var DEFAULTS = { limit: 400, lead: 7, rest: '', logo: '', csvUrl: '' };
   var DAY_MS = 86400000;
   var WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -24,6 +24,7 @@
     provisional: [],
     view: startOfMonth(new Date()),
     selected: null,
+    lastRefresh: null,
     index: null,
     pendingImport: null
   };
@@ -324,11 +325,15 @@
     var data = activeData();
     var count = data.orders.length;
     var note = state.dataset
-      ? 'Your imported data · ' + num(count) + ' orders'
+      ? (state.dataset.source === 'live sheet link' ? 'Live sheet link' : 'Your imported data') +
+        ' · ' + num(count) + ' orders'
       : 'Snapshot of ' + (data.source || 'order book') +
         (data.generatedAt ? ' · pulled ' + fmtDate(data.generatedAt.slice(0, 10)) : '') +
         ' · ' + num(count) + ' orders';
     if (state.provisional.length) note += ' · ' + state.provisional.length + ' provisional';
+    if (state.lastRefresh) {
+      note += ' · refreshed ' + state.lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
     document.getElementById('dataNote').textContent = note;
     var link = document.getElementById('sheetLink');
     if (BUNDLED.sheetId) link.href = 'https://docs.google.com/spreadsheets/d/' + BUNDLED.sheetId + '/edit';
@@ -590,6 +595,102 @@
     renderAll();
   }
 
+  /* ---------------- refresh ---------------- */
+
+  var toastTimer = null;
+
+  function toast(message, tone) {
+    var el = document.getElementById('toast');
+    el.textContent = message;
+    el.className = 'toast' + (tone ? ' ' + tone : '');
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, tone === 'bad' ? 7000 : 3500);
+  }
+
+  function spin(on) {
+    document.getElementById('refreshIcon').classList.toggle('spinning', !!on);
+    document.getElementById('refreshBtn').disabled = !!on;
+  }
+
+  /**
+   * Recompute everything against the current date, and — when a published
+   * sheet link is set — pull the latest rows from it first.
+   */
+  function refresh() {
+    var url = state.settings.csvUrl;
+    if (!url) {
+      state.lastRefresh = new Date();
+      renderAll();
+      toast('Refreshed · showing ' + fmtDate(iso(todayDate())));
+      return;
+    }
+    spin(true);
+    var bust = url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
+    fetch(bust, { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('The sheet link returned ' + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        if (/^\s*</.test(text)) {
+          throw new Error('That link returned a web page, not CSV — republish it as CSV');
+        }
+        var parsed = parseSheetText(text);
+        if (!parsed.orders.length) {
+          throw new Error('No order rows found — check the published tab and its columns');
+        }
+        var merged = mergeByDateRange(activeData().orders, parsed.orders);
+        state.dataset = {
+          source: 'live sheet link',
+          sheetId: BUNDLED.sheetId,
+          generatedAt: new Date().toISOString(),
+          orders: merged.orders
+        };
+        state.lastRefresh = new Date();
+        save();
+        renderAll();
+        toast('Updated from the sheet · ' + num(parsed.orders.length) + ' orders for ' +
+          fmtShort(merged.from) + ' – ' + fmtShort(merged.to) +
+          (merged.kept ? ' · ' + num(merged.kept) + ' earlier orders kept' : ''));
+      })
+      .catch(function (err) {
+        renderAll();
+        toast('Could not reach the sheet: ' + err.message + '. Use Update data to paste the rows instead.', 'bad');
+      })
+      .then(function () { spin(false); });
+  }
+
+  /**
+   * A published link usually covers one month's tab, so the incoming rows
+   * replace only the order dates they span — earlier months stay put.
+   */
+  function mergeByDateRange(existing, incoming) {
+    var dates = incoming.map(function (o) { return o.d; }).sort();
+    var from = dates[0], to = dates[dates.length - 1];
+    var kept = existing.filter(function (o) { return o.d < from || o.d > to; });
+    return {
+      orders: kept.concat(incoming).sort(function (a, b) { return a.d < b.d ? -1 : (a.d > b.d ? 1 : 0); }),
+      kept: kept.length,
+      from: from,
+      to: to
+    };
+  }
+
+  /** A tab left open overnight should not keep showing yesterday as today. */
+  function watchDayRollover() {
+    var day = iso(todayDate());
+    setInterval(function () {
+      var now = iso(todayDate());
+      if (now !== day) { day = now; renderAll(); }
+    }, 60000);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) return;
+      var now = iso(todayDate());
+      if (now !== day) { day = now; renderAll(); }
+    });
+  }
+
   /* ---------------- export ---------------- */
 
   function monthCSV() {
@@ -648,6 +749,7 @@
     document.getElementById('setLead').value = state.settings.lead;
     document.getElementById('setRest').value = state.settings.rest;
     document.getElementById('setLogo').value = state.settings.logo;
+    document.getElementById('setCsv').value = state.settings.csvUrl;
     var list = document.getElementById('provList');
     if (!state.provisional.length) { list.innerHTML = ''; return; }
     list.innerHTML = '<div class="muted sm-note">Provisional bookings</div>' +
@@ -670,6 +772,7 @@
     state.settings.lead = lead >= 0 ? lead : DEFAULTS.lead;
     state.settings.rest = document.getElementById('setRest').value;
     state.settings.logo = document.getElementById('setLogo').value.trim();
+    state.settings.csvUrl = document.getElementById('setCsv').value.trim();
     save();
     closeModal('settingsModal');
     renderAll();
@@ -714,6 +817,7 @@
       applyTheme();
     });
     document.getElementById('exportBtn').addEventListener('click', exportMonthCSV);
+    document.getElementById('refreshBtn').addEventListener('click', refresh);
 
     document.getElementById('importBtn').addEventListener('click', function () { openModal('importModal'); });
     document.getElementById('settingsBtn').addEventListener('click', function () {
@@ -749,6 +853,7 @@
     document.getElementById('saveSettings').addEventListener('click', saveSettings);
 
     renderAll();
+    watchDayRollover();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
