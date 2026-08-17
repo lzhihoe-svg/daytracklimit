@@ -12,8 +12,9 @@
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
-/* dark (default) */
-[data-theme="dark"] {
+/* Dark is the base palette, so the page is painted even before the theme
+   attribute is stamped on <html>. */
+:root {
   --bg: #0e1310;
   --bg-2: #131a14;
   --surface: #18211a;
@@ -22,11 +23,31 @@
   --text: #e9f2e4;
   --muted: #93a58e;
   --cell: #151d16;
+  --lime-text: var(--lime);
   --glow: radial-gradient(1200px 400px at 12% -10%, rgba(163, 230, 53, 0.12), transparent 60%);
 }
 
-/* light */
-[data-theme="light"] {
+/* Light: applied when the viewer's system asks for it, and again when light is
+   chosen explicitly, so either route wins over the base palette. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f8f2;
+    --bg-2: #eef3e8;
+    --surface: #ffffff;
+    --surface-2: #f4f8ef;
+    --line: #dce6d2;
+    --text: #16210f;
+    --muted: #63755c;
+    --cell: #ffffff;
+    --lime-deep: #4d7c0f;
+    --lime-text: #4d7c0f;
+    --lime-soft: rgba(101, 163, 13, 0.14);
+    --shadow: 0 10px 24px rgba(31, 51, 20, 0.08);
+    --glow: radial-gradient(1000px 340px at 12% -10%, rgba(163, 230, 53, 0.35), transparent 60%);
+  }
+}
+
+:root[data-theme="light"] {
   --bg: #f5f8f2;
   --bg-2: #eef3e8;
   --surface: #ffffff;
@@ -36,6 +57,7 @@
   --muted: #63755c;
   --cell: #ffffff;
   --lime-deep: #4d7c0f;
+  --lime-text: #4d7c0f;
   --lime-soft: rgba(101, 163, 13, 0.14);
   --shadow: 0 10px 24px rgba(31, 51, 20, 0.08);
   --glow: radial-gradient(1000px 340px at 12% -10%, rgba(163, 230, 53, 0.35), transparent 60%);
@@ -76,10 +98,9 @@ h3 { font-size: 1.05rem; }
 
 .limit-chip {
   font-size: 0.78rem; font-weight: 600; padding: 6px 11px; border-radius: 999px;
-  color: var(--lime-deep); background: var(--lime-soft);
+  color: var(--lime-text); background: var(--lime-soft);
   border: 1px solid color-mix(in srgb, var(--lime) 35%, transparent);
 }
-[data-theme="dark"] .limit-chip { color: var(--lime); }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -213,8 +234,7 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
 .verdict .v-title { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 7px; }
 .verdict .v-line { font-size: 0.82rem; color: var(--muted); }
 .verdict.good { border-color: color-mix(in srgb, var(--lime) 50%, var(--line)); background: var(--lime-soft); }
-.verdict.good .v-title { color: var(--lime-deep); }
-[data-theme="dark"] .verdict.good .v-title { color: var(--lime); }
+.verdict.good .v-title { color: var(--lime-text); }
 .verdict.warn { border-color: color-mix(in srgb, var(--amber) 50%, var(--line)); background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .verdict.warn .v-title { color: var(--amber); }
 .verdict.bad { border-color: color-mix(in srgb, var(--red) 50%, var(--line)); background: color-mix(in srgb, var(--red) 12%, transparent); }
@@ -241,15 +261,13 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
 .job { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
 .job:last-child { border-bottom: none; }
 .job .j-main { min-width: 0; flex: 1; }
-.job .j-cust { font-size: 0.78rem; color: var(--lime-deep); font-weight: 650; }
-[data-theme="dark"] .job .j-cust { color: var(--lime); }
+.job .j-cust { font-size: 0.78rem; color: var(--lime-text); font-weight: 650; }
 .job .j-name { font-size: 0.84rem; margin-top: 1px; overflow-wrap: anywhere; }
 .job .j-meta { font-size: 0.72rem; color: var(--muted); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .job .j-qty { font-size: 1rem; font-weight: 700; white-space: nowrap; }
 .tag { font-size: 0.66rem; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); }
 .tag.auto { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
-.tag.prov { color: var(--lime-deep); border-color: color-mix(in srgb, var(--lime) 45%, var(--line)); }
-[data-theme="dark"] .tag.prov { color: var(--lime); }
+.tag.prov { color: var(--lime-text); border-color: color-mix(in srgb, var(--lime) 45%, var(--line)); }
 .job.prov { background: color-mix(in srgb, var(--lime) 6%, transparent); }
 
 /* ---------- modals ---------- */
@@ -290,8 +308,7 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
   max-width: 1560px; margin: 0 auto;
 }
 .link { text-decoration: none; }
-.link:hover { color: var(--lime-deep); }
-[data-theme="dark"] .link:hover { color: var(--lime); }
+.link:hover { color: var(--lime-text); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1140px) {

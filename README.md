@@ -80,3 +80,10 @@ tools/extract_orders.py regenerates the snapshot from the .xlsx export
 
 The header falls back to a lime `ARAMEGA` wordmark. To show the real logo, paste its direct
 image URL into **Settings → Logo image URL**; it is remembered in the browser.
+
+## Hosted copy
+
+A published copy lives at <https://claude.ai/code/artifact/db11c85a-d0e0-4495-b7f1-a2199090fc81>
+(private to the account that published it until shared). Rebuild it with
+`python3 tools/build_artifact.py`; `python3 tools/build_single.py` produces a
+standalone `dist/tracker.html` that runs from anywhere.

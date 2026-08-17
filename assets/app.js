@@ -19,7 +19,7 @@
 
   var state = {
     settings: Object.assign({}, DEFAULTS),
-    theme: 'dark',
+    theme: null,          // null = follow the viewer's system setting
     dataset: null,        // imported orders, null = use bundled snapshot
     provisional: [],
     view: startOfMonth(new Date()),
@@ -132,7 +132,7 @@
 
   function renderAll() {
     buildIndex();
-    document.documentElement.setAttribute('data-theme', state.theme);
+    applyTheme();
     document.getElementById('limitChip').textContent = num(state.settings.limit) + ' PCS / day';
     document.getElementById('leadNote').textContent = state.settings.lead;
     renderLogo();
@@ -140,6 +140,15 @@
     renderCalendar();
     renderDayPanel();
     renderFooter();
+  }
+
+  function systemTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  function applyTheme() {
+    if (state.theme) document.documentElement.setAttribute('data-theme', state.theme);
+    else document.documentElement.removeAttribute('data-theme');
   }
 
   function renderLogo() {
@@ -583,7 +592,7 @@
 
   /* ---------------- export ---------------- */
 
-  function exportMonthCSV() {
+  function monthCSV() {
     var view = state.view;
     var last = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
     var limit = state.settings.limit;
@@ -594,12 +603,39 @@
       lines.push([key, WEEKDAYS[fromISO(key).getDay()], qty, dayJobs(key).length,
         limit, Math.max(0, limit - qty), Math.max(0, qty - limit)].join(','));
     }
-    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    return lines.join('\n');
+  }
+
+  function browserDownload(filename, text) {
+    var blob = new Blob([text], { type: 'text/csv' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'aramega-load-' + view.getFullYear() + '-' + pad(view.getMonth() + 1) + '.csv';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  function exportMonthCSV() {
+    var view = state.view;
+    var name = 'aramega-load-' + view.getFullYear() + '-' + pad(view.getMonth() + 1) + '.csv';
+    var text = monthCSV();
+    // Hosted viewers hand the file over through the downloads capability;
+    // a plain page just downloads it.
+    if (!window.claude || typeof window.claude.use !== 'function') {
+      browserDownload(name, text);
+      return;
+    }
+    window.claude.use('downloads').then(function (downloads) {
+      if (!downloads) { browserDownload(name, text); return; }
+      return downloads.save({ filename: name, data: text }).catch(function (err) {
+        var code = err && err.code;
+        if (code === 'extension_not_enabled') {
+          return downloads.save({ filename: name.replace(/\.csv$/, '.txt'), data: text });
+        }
+        if (code === 'declined' || code === 'rate_limited') return;
+        browserDownload(name, text);
+      });
+    }).catch(function () { browserDownload(name, text); });
   }
 
   /* ---------------- modals + settings ---------------- */
@@ -672,9 +708,10 @@
     });
 
     document.getElementById('themeBtn').addEventListener('click', function () {
-      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      var current = state.theme || systemTheme();
+      state.theme = current === 'dark' ? 'light' : 'dark';
       save();
-      document.documentElement.setAttribute('data-theme', state.theme);
+      applyTheme();
     });
     document.getElementById('exportBtn').addEventListener('click', exportMonthCSV);
 
