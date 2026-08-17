@@ -190,7 +190,7 @@ h3 { font-size: 1.05rem; }
 
 .cell {
   min-height: 92px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--cell); padding: 7px 8px 8px; cursor: pointer; text-align: left;
+  background: var(--cell); padding: 7px 8px 8px; cursor: pointer; text-align: left; overflow: hidden;
   font: inherit; color: inherit; display: flex; flex-direction: column; gap: 4px;
   transition: border-color 0.12s, transform 0.08s, background 0.12s;
 }
@@ -205,7 +205,7 @@ h3 { font-size: 1.05rem; }
   font-size: 0.78rem; font-weight: 620; color: var(--muted);
   width: 22px; height: 22px; display: grid; place-items: center; border-radius: 7px;
 }
-.cell .qty { font-size: 1.22rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.cell .qty { font-size: 1.22rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; overflow-wrap: anywhere; }
 .cell .qty small { font-size: 0.66rem; font-weight: 500; color: var(--muted); margin-left: 3px; }
 .cell .jobs { font-size: 0.72rem; color: var(--text); opacity: 0.75; font-variant-numeric: tabular-nums; }
 .cell .bar { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: auto; }
@@ -277,22 +277,29 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
 .day-summary.s-tight .bar i { background: var(--amber); }
 .day-summary.s-over .bar i { background: var(--red); }
 
-.job-table-wrap { overflow-x: auto; }
-.job-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.job-table-wrap { overflow-x: hidden; }
+/* Fixed layout keeps the four columns inside the panel instead of pushing it
+   sideways — the job name takes the slack and wraps. */
+.job-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.8rem; }
+.job-table col.c-cust { width: 26%; }
+.job-table col.c-job { width: 40%; }
+.job-table col.c-qty { width: 15%; }
+.job-table col.c-due { width: 19%; }
 .job-table th {
   text-align: left; font-size: 0.68rem; font-weight: 620; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--muted); padding: 8px 10px; white-space: nowrap;
+  letter-spacing: 0.05em; color: var(--muted); padding: 8px 10px;
   border-bottom: 1px solid var(--line); background: var(--surface-2);
   position: sticky; top: 0; z-index: 1;
 }
 .job-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .job-table tr:last-child td { border-bottom: none; }
 .job-table .right { text-align: right; }
-.job-table .j-cust { color: var(--lime-text); font-weight: 650; white-space: nowrap; }
-.job-table .j-name { overflow-wrap: anywhere; min-width: 150px; }
+.job-table .j-cust { color: var(--lime-text); font-weight: 650; overflow-wrap: anywhere; hyphens: auto; }
+.job-table .j-name { overflow-wrap: anywhere; hyphens: auto; }
 .job-table .j-qty { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.job-table .j-due { white-space: nowrap; color: var(--muted); }
-.job-table .j-due .tag { margin-left: 5px; }
+.job-table .j-due { color: var(--muted); }
+.job-table .j-due .date { white-space: nowrap; }
+.job-table .j-due .tag { display: inline-block; margin-top: 4px; white-space: nowrap; }
 .job-table tr.prov { background: color-mix(in srgb, var(--lime) 7%, transparent); }
 .tag { font-size: 0.66rem; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); }
 .tag.auto { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
@@ -377,8 +384,13 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
   .layout { padding: 14px; }
   .kpis { grid-template-columns: minmax(0, 1fr); }
   .cell { min-height: 74px; padding: 5px 4px; gap: 2px; }
-  .cell .qty { font-size: 0.86rem; }
+  .cell .qty { font-size: 0.8rem; letter-spacing: -0.03em; }
   .cell .jobs { font-size: 0.64rem; }
+  .job-table { font-size: 0.76rem; }
+  .job-table th, .job-table td { padding: 7px 6px; }
+  .job-table th { font-size: 0.62rem; letter-spacing: 0.03em; }
+  .job-table .tag { font-size: 0.6rem; padding: 0 4px; }
+  .day-body { max-height: none; }
   .cell .qty small { display: none; }
   .cell .dnum { width: 18px; height: 18px; font-size: 0.7rem; }
   .cell .over-tag { font-size: 0.6rem; padding: 0 3px; }
@@ -387,4 +399,12 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
   .brand-text small { display: none; }
   .legend { display: none; }
   .cal-nav h2 { min-width: 110px; font-size: 0.9rem; }
+}
+
+/* Smallest phones: the red bar already flags an over-limit day, so the
+   overflow badge can go rather than widen the cell. */
+@media (max-width: 360px) {
+  .cell .over-tag { display: none; }
+  .cell .qty { font-size: 0.72rem; }
+  .cell .jobs { font-size: 0.6rem; }
 }

@@ -340,15 +340,17 @@
 
     var list = jobs.length
       ? '<div class="job-table-wrap"><table class="job-table">' +
-        '<thead><tr><th>Customer</th><th>Job name</th><th class="right">PCS</th><th>Due date</th></tr></thead><tbody>' +
+        '<colgroup><col class="c-cust"><col class="c-job"><col class="c-qty"><col class="c-due"></colgroup>' +
+        '<thead><tr><th>Customer</th><th>Job name</th><th class="right">PCS</th><th>Due</th></tr></thead><tbody>' +
         jobs.map(function (o) {
           return '<tr' + (o.prov ? ' class="prov"' : '') + '>' +
             '<td class="j-cust">' + esc(o.c || '—') + '</td>' +
             '<td class="j-name">' + esc(o.j || 'Job') + '</td>' +
             '<td class="right j-qty">' + num(o.q) + '</td>' +
-            '<td class="j-due">' + fmtShort(effectiveDue(o)) +
-              (o.prov ? '<span class="tag prov">provisional</span>'
-                      : (o.due ? '' : '<span class="tag auto">auto +' + state.settings.lead + 'd</span>')) +
+            '<td class="j-due"><span class="date">' + fmtShort(effectiveDue(o)) + '</span>' +
+              (o.prov ? '<span class="tag prov">booked</span>'
+                      : (o.due ? '' : '<span class="tag auto" title="No due date in the order book — ' +
+                          state.settings.lead + '-day default">+' + state.settings.lead + 'd</span>')) +
             '</td></tr>';
         }).join('') +
         '</tbody></table></div>'
