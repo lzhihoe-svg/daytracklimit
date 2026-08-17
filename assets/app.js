@@ -10,7 +10,9 @@
 
   var STORE_KEY = 'aramega-dlt-v1';
   var BUNDLED = window.ARAMEGA_ORDERBOOK || { orders: [], source: 'empty' };
-  var DEFAULTS = { limit: 400, lead: 7, rest: '', logo: '', csvUrl: '' };
+  var DEFAULTS = { limit: 400, lead: 7, rest: '', logo: '', csvUrl: '', history: 'window' };
+  // The month the board starts from — earlier tabs are finished work.
+  var TRACK_FROM = '2026-08-01';
   var DAY_MS = 86400000;
   var WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -83,7 +85,25 @@
 
   function activeData() { return state.dataset || BUNDLED; }
 
-  function allOrders() { return activeData().orders.concat(state.provisional); }
+  /**
+   * The board tracks the current month's tab, and from the month after
+   * TRACK_FROM it also carries the previous month, whose jobs are still on the
+   * floor. Older tabs are closed work — kept in the data, left out of the view
+   * unless "all history" is switched on in Settings.
+   */
+  function windowStart() {
+    if (state.settings.history === 'all') return null;
+    var now = todayDate();
+    var prevMonth = iso(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    return prevMonth > TRACK_FROM ? prevMonth : TRACK_FROM;
+  }
+
+  function allOrders() {
+    var from = windowStart();
+    var orders = activeData().orders;
+    if (from) orders = orders.filter(function (o) { return o.d >= from; });
+    return orders.concat(state.provisional);
+  }
 
   /** The day an order consumes capacity on. */
   function effectiveDue(o) {
@@ -321,15 +341,28 @@
     body.innerHTML = head + list;
   }
 
+  function monthsInView() {
+    var from = windowStart();
+    if (!from) return 'All months';
+    var start = fromISO(from);
+    var now = todayDate();
+    var startLabel = MONTHS[start.getMonth()].slice(0, 3);
+    var endLabel = MONTHS[now.getMonth()].slice(0, 3) + ' ' + now.getFullYear();
+    return start.getMonth() === now.getMonth() && start.getFullYear() === now.getFullYear()
+      ? endLabel + ' only'
+      : startLabel + ' – ' + endLabel;
+  }
+
   function renderFooter() {
     var data = activeData();
-    var count = data.orders.length;
+    var count = allOrders().length - state.provisional.length;
     var note = state.dataset
       ? (state.dataset.source === 'live sheet link' ? 'Live sheet link' : 'Your imported data') +
         ' · ' + num(count) + ' orders'
       : 'Snapshot of ' + (data.source || 'order book') +
         (data.generatedAt ? ' · pulled ' + fmtDate(data.generatedAt.slice(0, 10)) : '') +
         ' · ' + num(count) + ' orders';
+    note += ' · ' + monthsInView();
     if (state.provisional.length) note += ' · ' + state.provisional.length + ' provisional';
     if (state.lastRefresh) {
       note += ' · refreshed ' + state.lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -750,6 +783,7 @@
     document.getElementById('setRest').value = state.settings.rest;
     document.getElementById('setLogo').value = state.settings.logo;
     document.getElementById('setCsv').value = state.settings.csvUrl;
+    document.getElementById('setHistory').checked = state.settings.history === 'all';
     var list = document.getElementById('provList');
     if (!state.provisional.length) { list.innerHTML = ''; return; }
     list.innerHTML = '<div class="muted sm-note">Provisional bookings</div>' +
@@ -773,6 +807,7 @@
     state.settings.rest = document.getElementById('setRest').value;
     state.settings.logo = document.getElementById('setLogo').value.trim();
     state.settings.csvUrl = document.getElementById('setCsv').value.trim();
+    state.settings.history = document.getElementById('setHistory').checked ? 'all' : 'window';
     save();
     closeModal('settingsModal');
     renderAll();

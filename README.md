@@ -17,6 +17,15 @@ accepted or pushed out before the floor is overloaded.
 
 The lead time and the daily limit are both editable in Settings.
 
+## Which months are on the board
+
+The board follows the order book's latest month tab: right now that is August 2026 alone.
+From the following month it also carries the month before — September shows August and
+September, October shows September and October — because the previous month's jobs are
+still on the floor. Closed months stay in the data and can be brought back with
+**Settings → Include closed months as well**. `TRACK_FROM` in `assets/app.js` sets the
+month the board starts from.
+
 ## What it does
 
 * **Calendar** — every day shows PCS due, job count and a capacity bar, colour-coded
