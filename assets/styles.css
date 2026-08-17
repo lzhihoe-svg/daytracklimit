@@ -130,11 +130,16 @@ h3 { font-size: 1.05rem; }
 }
 .kpis { grid-area: kpis; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .calendar-panel { grid-area: cal; }
+/* The column stretches to the calendar's row, and the panel sticks INSIDE it,
+   so it can never travel down over the checker in the row below. */
 .side {
-  grid-area: side; display: flex; flex-direction: column; gap: 16px;
-  position: sticky; top: 78px; max-height: calc(100vh - 96px); min-height: 0;
+  grid-area: side; align-self: stretch; display: flex; flex-direction: column; gap: 16px;
+  min-height: 0;
 }
-.day-panel { display: flex; flex-direction: column; min-height: 0; }
+.day-panel {
+  display: flex; flex-direction: column; min-height: 0;
+  position: sticky; top: 78px; max-height: calc(100vh - 96px);
+}
 .checker { grid-area: check; }
 
 .panel {
@@ -389,7 +394,7 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "kpis" "cal" "side" "check"; }
   .checker-body { grid-template-columns: minmax(0, 1fr); }
   .checker-form { border-right: none; border-bottom: 1px solid var(--line); }
-  .side { position: static; max-height: none; }
+  .day-panel { position: static; max-height: none; }
   .day-body.scrollable { mask-image: none; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
