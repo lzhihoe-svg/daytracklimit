@@ -344,8 +344,8 @@
         '<thead><tr><th>Customer</th><th>Job name</th><th class="right">PCS</th><th>Due</th></tr></thead><tbody>' +
         jobs.map(function (o) {
           return '<tr' + (o.prov ? ' class="prov"' : '') + '>' +
-            '<td class="j-cust">' + esc(o.c || '—') + '</td>' +
-            '<td class="j-name">' + esc(o.j || 'Job') + '</td>' +
+            '<td class="j-cust" title="' + esc(o.c || '') + '">' + esc(o.c || '—') + '</td>' +
+            '<td class="j-name" title="' + esc(o.j || '') + '">' + esc(o.j || 'Job') + '</td>' +
             '<td class="right j-qty">' + num(o.q) + '</td>' +
             '<td class="j-due"><span class="date">' + fmtShort(effectiveDue(o)) + '</span>' +
               (o.prov ? '<span class="tag prov">booked</span>'
@@ -357,6 +357,22 @@
       : '<p class="empty">No jobs due on this day — full capacity available.</p>';
 
     body.innerHTML = head + list;
+    markScrollable(body);
+  }
+
+  /** Show the bottom fade only while there is more of the list below. */
+  function markScrollable(body) {
+    var update = function () {
+      var more = body.scrollHeight > body.clientHeight + 2;
+      body.classList.toggle('scrollable', more);
+      body.classList.toggle('at-end', more && body.scrollTop + body.clientHeight >= body.scrollHeight - 2);
+    };
+    requestAnimationFrame(update);
+    if (!body.dataset.watched) {
+      body.dataset.watched = '1';
+      body.addEventListener('scroll', update);
+      window.addEventListener('resize', update);
+    }
   }
 
   function monthsInView() {
