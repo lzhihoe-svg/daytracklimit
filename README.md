@@ -41,6 +41,12 @@ month the board starts from.
   the deadline genuinely cannot be met it says how many pieces fall short and the
   soonest date the whole order can be finished. Either way it can be pinned to the
   calendar as a *provisional* booking while the customer decides.
+* **Statistics** — orders and pieces on the board, average per day against the limit,
+  average order size, **average wait** (order date to due date, with the median), the share
+  of rush jobs due inside the production lead, the busiest day, pieces still bookable,
+  how far over the limit the board runs, and the share of orders with no due date in the
+  sheet. Two charts sit beside them: average load by weekday against the daily limit, and
+  the busiest customers by share of pieces.
 * **Refresh** — recomputes everything against the current date, and pulls the latest rows
   straight from the sheet when a published CSV link is set (Settings → Live sheet CSV link;
   in Sheets: *File → Share → Publish to web*, pick the month's tab, choose CSV). Incoming

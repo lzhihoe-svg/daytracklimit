@@ -64,6 +64,24 @@
     </section>
   </aside>
 
+  <section class="panel stats" id="stats">
+    <div class="panel-head">
+      <h2>Order book statistics</h2>
+      <span class="muted sm-note" id="statsPeriod"></span>
+    </div>
+    <div class="stat-tiles" id="statTiles"></div>
+    <div class="stat-charts">
+      <figure class="chart">
+        <figcaption>Average load by weekday <span class="muted sm-note">PCS due per day, against the <span id="chartLimit">450</span> limit</span></figcaption>
+        <div class="bars-v" id="weekdayChart"></div>
+      </figure>
+      <figure class="chart">
+        <figcaption>Busiest customers <span class="muted sm-note">share of the pieces on the board</span></figcaption>
+        <div class="bars-h" id="customerChart"></div>
+      </figure>
+    </div>
+  </section>
+
   <section class="panel checker" id="checker">
     <div class="panel-head">
       <h2>Can we take this order?</h2>
@@ -93,6 +111,7 @@
 </footer>
 
 <div class="toast" id="toast" hidden></div>
+<div class="chart-tip" id="chartTip" hidden></div>
 
 <!-- Import dialog -->
 <div class="modal" id="importModal" hidden>

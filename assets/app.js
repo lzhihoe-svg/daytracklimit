@@ -170,6 +170,7 @@
     renderKpis();
     renderCalendar();
     renderDayPanel();
+    renderStats();
     renderFooter();
   }
 
@@ -385,6 +386,187 @@
     return start.getMonth() === now.getMonth() && start.getFullYear() === now.getFullYear()
       ? endLabel + ' only'
       : startLabel + ' – ' + endLabel;
+  }
+
+  /* ---------------- statistics ---------------- */
+
+  /** Everything the statistics panel reports, over the months currently in view. */
+  function computeStats() {
+    var orders = allOrders();
+    var limit = state.settings.limit;
+    var today = iso(todayDate());
+    if (!orders.length) return null;
+
+    var totalPcs = 0, waits = [], rush = 0, noDue = 0, largest = null;
+    var byCustomer = Object.create(null);
+    orders.forEach(function (o) {
+      totalPcs += o.q;
+      var wait = daysBetween(o.d, effectiveDue(o));
+      waits.push(wait);
+      if (wait <= state.settings.minLead) rush++;
+      if (!o.due) noDue++;
+      if (!largest || o.q > largest.q) largest = o;
+      var key = o.c || '—';
+      byCustomer[key] = (byCustomer[key] || 0) + o.q;
+    });
+
+    var days = Object.keys(state.index).sort();
+    var first = days[0], last = days[days.length - 1];
+    var span = daysBetween(first, last) + 1;
+    var activeDays = days.length;
+
+    var busiest = days.reduce(function (best, d) {
+      return (!best || state.index[d].qty > state.index[best].qty) ? d : best;
+    }, null);
+    var overDays = 0, excess = 0;
+    days.forEach(function (d) {
+      if (state.index[d].qty > limit) { overDays++; excess += state.index[d].qty - limit; }
+    });
+
+    // Bookable capacity from the first day production could actually start.
+    var openFrom = earliestStart(), openPcs = 0, openDays = 0;
+    for (var i = 0; i < 30; i++) {
+      var d = isoAdd(openFrom, i);
+      if (isRestDay(d)) continue;
+      var free = freeOn(d);
+      if (free > 0) { openPcs += free; openDays++; }
+    }
+
+    // Average PCS on each weekday across the period.
+    var wdSum = [0, 0, 0, 0, 0, 0, 0], wdCount = [0, 0, 0, 0, 0, 0, 0];
+    for (var j = 0; j < span; j++) {
+      var day = isoAdd(first, j);
+      var w = fromISO(day).getDay();
+      wdCount[w]++;
+      wdSum[w] += dayLoad(day);
+    }
+    var weekday = WEEKDAYS.map(function (name, idx) {
+      return { name: name, avg: wdCount[idx] ? Math.round(wdSum[idx] / wdCount[idx]) : 0 };
+    });
+
+    var customers = Object.keys(byCustomer).map(function (k) {
+      return { name: k, qty: byCustomer[k] };
+    }).sort(function (a, b) { return b.qty - a.qty; });
+    var top = customers.slice(0, 6);
+    var restQty = customers.slice(6).reduce(function (a, c) { return a + c.qty; }, 0);
+    if (restQty > 0) top.push({ name: 'Everyone else', qty: restQty, rest: true });
+
+    waits.sort(function (a, b) { return a - b; });
+
+    return {
+      orders: orders.length, totalPcs: totalPcs, customers: customers.length,
+      first: first, last: last, span: span, activeDays: activeDays,
+      perActiveDay: Math.round(totalPcs / activeDays),
+      utilisation: Math.round((totalPcs / (span * limit)) * 100),
+      avgOrder: Math.round(totalPcs / orders.length),
+      largest: largest,
+      avgWait: Math.round((waits.reduce(function (a, w) { return a + w; }, 0) / waits.length) * 10) / 10,
+      medianWait: waits[Math.floor(waits.length / 2)],
+      rushShare: Math.round((rush / orders.length) * 100), rush: rush,
+      noDueShare: Math.round((noDue / orders.length) * 100),
+      busiest: busiest, busiestQty: busiest ? state.index[busiest].qty : 0,
+      busiestJobs: busiest ? state.index[busiest].jobs.length : 0,
+      overDays: overDays, excess: excess,
+      openPcs: openPcs, openDays: openDays, openFrom: openFrom,
+      weekday: weekday, top: top, today: today
+    };
+  }
+
+  function renderStats() {
+    var s = computeStats();
+    var period = document.getElementById('statsPeriod');
+    if (!s) {
+      period.textContent = 'No orders in view';
+      document.getElementById('statTiles').innerHTML = '';
+      document.getElementById('weekdayChart').innerHTML = '';
+      document.getElementById('customerChart').innerHTML = '';
+      return;
+    }
+    var limit = state.settings.limit;
+    document.getElementById('chartLimit').textContent = num(limit);
+    period.textContent = fmtShort(s.first) + ' – ' + fmtDate(s.last).replace(/^\w+, /, '') +
+      ' · ' + s.activeDays + ' days with work';
+
+    var tiles = [
+      { label: 'Orders', value: num(s.orders), unit: 'jobs', sub: s.customers + ' customers' },
+      { label: 'Pieces', value: num(s.totalPcs), unit: 'PCS', sub: 'over ' + s.span + ' days' },
+      { label: 'Average per day', value: num(s.perActiveDay), unit: 'PCS',
+        sub: s.utilisation + '% of the ' + num(limit) + ' limit' },
+      { label: 'Average order', value: num(s.avgOrder), unit: 'PCS',
+        sub: 'largest ' + num(s.largest.q) + ' — ' + (s.largest.c || '—') },
+      { label: 'Average wait', value: s.avgWait, unit: 'days',
+        sub: 'order to due date · median ' + s.medianWait },
+      { label: 'Rush orders', value: s.rushShare + '%', unit: '',
+        sub: num(s.rush) + ' jobs due within ' + state.settings.minLead + ' days',
+        tone: s.rushShare >= 25 ? 'warn' : '' },
+      { label: 'Busiest day', value: fmtShort(s.busiest), unit: '',
+        sub: num(s.busiestQty) + ' PCS · ' + s.busiestJobs + ' jobs',
+        tone: s.busiestQty > limit ? 'bad' : '' },
+      { label: 'Still bookable', value: num(s.openPcs), unit: 'PCS',
+        sub: 'free across ' + s.openDays + ' days from ' + fmtShort(s.openFrom) },
+      { label: 'Over the limit', value: num(s.excess), unit: 'PCS',
+        sub: 'spread over ' + s.overDays + ' day' + (s.overDays === 1 ? '' : 's'),
+        tone: s.excess > 0 ? 'bad' : '' },
+      { label: 'No due date', value: s.noDueShare + '%', unit: '',
+        sub: 'planned on the ' + state.settings.lead + '-day default' }
+    ];
+    document.getElementById('statTiles').innerHTML = tiles.map(function (t) {
+      return '<div class="tile ' + (t.tone || '') + '">' +
+        '<div class="t-label">' + t.label + '</div>' +
+        '<div class="t-value">' + t.value + (t.unit ? ' <span>' + t.unit + '</span>' : '') + '</div>' +
+        '<div class="t-sub">' + esc(t.sub) + '</div></div>';
+    }).join('');
+
+    // Weekday: one measure, one hue — over-limit days take the status colour and
+    // carry their own number, so the state never rests on colour alone.
+    var scale = Math.max(limit, Math.max.apply(null, s.weekday.map(function (w) { return w.avg; }))) * 1.05;
+    document.getElementById('weekdayChart').innerHTML =
+      '<div class="plot">' +
+        '<div class="limit-line" style="bottom:' + ((limit / scale) * 100) + '%"><span>' + num(limit) + '</span></div>' +
+        '<div class="cols">' +
+        s.weekday.map(function (w) {
+          var over = w.avg > limit;
+          return '<div class="bar-col" data-tip="' + w.name + ' · ' + num(w.avg) + ' PCS on an average day' +
+            (over ? ' · over the ' + num(limit) + ' limit' : '') + '">' +
+            '<i class="b-fill' + (over ? ' over' : '') + '" style="height:' +
+              Math.max(2, (w.avg / scale) * 100) + '%">' +
+              '<span class="b-value">' + num(w.avg) + '</span></i></div>';
+        }).join('') +
+        '</div></div>' +
+      '<div class="names">' + s.weekday.map(function (w) {
+        return '<span>' + w.name + '</span>';
+      }).join('') + '</div>';
+
+    var topMax = s.top[0].qty;
+    document.getElementById('customerChart').innerHTML = s.top.map(function (c) {
+      var share = Math.round((c.qty / s.totalPcs) * 100);
+      return '<div class="bar-row' + (c.rest ? ' rest' : '') + '" data-tip="' + esc(c.name) + ' · ' +
+        num(c.qty) + ' PCS · ' + share + '% of the board">' +
+        '<span class="r-name" title="' + esc(c.name) + '">' + esc(c.name) + '</span>' +
+        '<span class="r-track"><i style="width:' + Math.max(2, (c.qty / topMax) * 100) + '%"></i></span>' +
+        '<span class="r-value">' + num(c.qty) + ' <span class="muted">' + share + '%</span></span></div>';
+    }).join('');
+  }
+
+  /** Shared hover tooltip for the chart marks. */
+  function initChartTips() {
+    var tip = document.getElementById('chartTip');
+    document.getElementById('stats').addEventListener('mouseover', function (e) {
+      var mark = e.target.closest('[data-tip]');
+      if (!mark) return;
+      tip.textContent = mark.dataset.tip;
+      tip.hidden = false;
+    });
+    document.getElementById('stats').addEventListener('mousemove', function (e) {
+      if (tip.hidden) return;
+      var w = tip.offsetWidth;
+      tip.style.left = Math.min(window.innerWidth - w - 12, Math.max(12, e.clientX - w / 2)) + 'px';
+      tip.style.top = Math.max(12, e.clientY - tip.offsetHeight - 14) + 'px';
+    });
+    document.getElementById('stats').addEventListener('mouseout', function (e) {
+      if (!e.target.closest('[data-tip]')) return;
+      tip.hidden = true;
+    });
   }
 
   function renderFooter() {
@@ -971,6 +1153,7 @@
     document.getElementById('saveSettings').addEventListener('click', saveSettings);
 
     renderAll();
+    initChartTips();
     watchDayRollover();
   }
 
