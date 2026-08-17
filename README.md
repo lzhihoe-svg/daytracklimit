@@ -1,7 +1,7 @@
 # Aramega — Daily Quantity Limit Tracker
 
 A web app that reads the Aramega order book and shows, day by day, how many pieces and
-how many jobs are due — against the **400 PCS daily production limit** — so orders can be
+how many jobs are due — against the **450 PCS daily production limit** — so orders can be
 accepted or pushed out before the floor is overloaded.
 
 ## How a job lands on a day
@@ -28,14 +28,16 @@ month the board starts from.
 
 ## What it does
 
-* **Calendar** — every day shows PCS due, job count and a capacity bar, colour-coded
-  light / healthy / near limit / over limit. Click a day to list its jobs.
+* **Calendar** — every day shows PCS due, the number of jobs and a capacity bar,
+  colour-coded light / healthy / near limit / over limit. Click a day for its jobs,
+  listed by customer, job name, PCS and due date.
 * **KPI strip** — today's load, the next 7 days against capacity, how many of the next
-  30 days are over the limit, and the open pipeline.
-* **"Can we take this order?"** — enter a quantity and (optionally) a due date. The app
-  answers yes/no, names the earliest day the order fits whole, and proposes a split
-  across the free capacity before the due date. The order can be pinned to the calendar
-  as a *provisional* booking while the customer decides.
+  30 days are over the limit, and the open pipeline; each carries its job count.
+* **"Can we take this order?"** (foot of the page) — enter a quantity and (optionally) a
+  due date. The app answers yes/no, names the next available date, and proposes a split
+  across the free capacity before the due date. Nothing is offered sooner than the
+  minimum production lead (3 days), so the floor has time to run it. The order can be
+  pinned to the calendar as a *provisional* booking while the customer decides.
 * **Refresh** — recomputes everything against the current date, and pulls the latest rows
   straight from the sheet when a published CSV link is set (Settings → Live sheet CSV link;
   in Sheets: *File → Share → Publish to web*, pick the month's tab, choose CSV). Incoming

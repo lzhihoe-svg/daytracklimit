@@ -3,14 +3,16 @@
  * Every order occupies one production day: its due date if the order book has
  * one, otherwise the order date plus the lead time (7 days by default).
  * The calendar shows the pieces and jobs landing on each day against the
- * 400 PCS daily limit.
+ * 450 PCS daily limit (editable in Settings).
  */
 (function () {
   'use strict';
 
   var STORE_KEY = 'aramega-dlt-v1';
   var BUNDLED = window.ARAMEGA_ORDERBOOK || { orders: [], source: 'empty' };
-  var DEFAULTS = { limit: 400, lead: 7, rest: '', logo: '', csvUrl: '', history: 'window' };
+  var DEFAULTS = { limit: 450, lead: 7, minLead: 3, rest: '', logo: '', csvUrl: '', history: 'window' };
+  // Bumped when a default changes so saved settings pick the new value up once.
+  var DEFAULTS_VERSION = 2;
   // The month the board starts from — earlier tabs are finished work.
   var TRACK_FROM = '2026-08-01';
   var DAY_MS = 86400000;
@@ -64,6 +66,10 @@
       if (!raw) return;
       var saved = JSON.parse(raw);
       if (saved.settings) state.settings = Object.assign({}, DEFAULTS, saved.settings);
+      if (saved.defaultsVersion !== DEFAULTS_VERSION) {
+        state.settings.limit = DEFAULTS.limit;
+        state.settings.minLead = DEFAULTS.minLead;
+      }
       if (saved.theme) state.theme = saved.theme;
       if (saved.dataset && saved.dataset.orders) state.dataset = saved.dataset;
       if (Array.isArray(saved.provisional)) state.provisional = saved.provisional;
@@ -73,6 +79,7 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
+        defaultsVersion: DEFAULTS_VERSION,
         settings: state.settings,
         theme: state.theme,
         dataset: state.dataset,
@@ -135,6 +142,8 @@
     return e ? e.jobs : [];
   }
   function freeOn(dayISO) { return Math.max(0, state.settings.limit - dayLoad(dayISO)); }
+  /** Nothing can be started before the floor has had its minimum lead. */
+  function earliestStart() { return isoAdd(iso(todayDate()), state.settings.minLead); }
   function isRestDay(dayISO) {
     return state.settings.rest !== '' && fromISO(dayISO).getDay() === Number(state.settings.rest);
   }
@@ -156,6 +165,7 @@
     applyTheme();
     document.getElementById('limitChip').textContent = num(state.settings.limit) + ' PCS / day';
     document.getElementById('leadNote').textContent = state.settings.lead;
+    document.getElementById('minLeadNote').textContent = state.settings.minLead;
     renderLogo();
     renderKpis();
     renderCalendar();
@@ -196,10 +206,10 @@
       week += dayLoad(d);
       weekJobs += dayJobs(d).length;
     }
-    var overDays = 0, horizonQty = 0, horizonJobs = 0;
+    var overDays = 0, overJobs = 0, horizonQty = 0, horizonJobs = 0;
     for (var j = 0; j < 30; j++) {
       var dd = isoAdd(today, j);
-      if (dayLoad(dd) > limit) overDays++;
+      if (dayLoad(dd) > limit) { overDays++; overJobs += dayJobs(dd).length; }
     }
     Object.keys(state.index).forEach(function (k) {
       if (k >= today) { horizonQty += state.index[k].qty; horizonJobs += state.index[k].jobs.length; }
@@ -208,28 +218,32 @@
     var cards = [
       {
         label: 'Today · ' + fmtShort(today),
-        value: num(todayQty) + ' <span>/ ' + num(limit) + '</span>',
+        value: num(todayQty) + ' <span>/ ' + num(limit) + ' PCS</span>',
+        jobs: dayJobs(today).length,
         sub: todayQty > limit
-          ? 'Over by ' + num(todayQty - limit) + ' PCS · ' + dayJobs(today).length + ' jobs'
-          : num(limit - todayQty) + ' PCS still free · ' + dayJobs(today).length + ' jobs',
+          ? 'Over by ' + num(todayQty - limit) + ' PCS'
+          : num(limit - todayQty) + ' PCS still free',
         tone: todayQty > limit ? 'bad' : (todayQty >= limit * 0.85 ? 'warn' : '')
       },
       {
         label: 'Next 7 days',
-        value: num(week) + ' <span>/ ' + num(limit * 7) + '</span>',
-        sub: Math.round((week / (limit * 7)) * 100) + '% of capacity · ' + weekJobs + ' jobs',
+        value: num(week) + ' <span>/ ' + num(limit * 7) + ' PCS</span>',
+        jobs: weekJobs,
+        sub: Math.round((week / (limit * 7)) * 100) + '% of capacity',
         tone: week > limit * 7 ? 'bad' : (week >= limit * 7 * 0.85 ? 'warn' : '')
       },
       {
         label: 'Over limit · next 30 days',
         value: String(overDays) + ' <span>days</span>',
+        jobs: overJobs,
         sub: overDays ? 'Reschedule or split these days' : 'Every day within the limit',
         tone: overDays > 4 ? 'bad' : (overDays ? 'warn' : '')
       },
       {
         label: 'Open pipeline',
         value: num(horizonQty) + ' <span>PCS</span>',
-        sub: num(horizonJobs) + ' jobs due today or later',
+        jobs: horizonJobs,
+        sub: 'Due today or later',
         tone: ''
       }
     ];
@@ -238,7 +252,10 @@
       return '<div class="kpi ' + c.tone + '">' +
         '<div class="k-label">' + c.label + '</div>' +
         '<div class="k-value">' + c.value + '</div>' +
-        '<div class="k-sub">' + c.sub + '</div></div>';
+        '<div class="k-foot">' +
+          '<span class="k-jobs">' + num(c.jobs) + (c.jobs === 1 ? ' job' : ' jobs') + '</span>' +
+          '<span class="k-sub">' + c.sub + '</span>' +
+        '</div></div>';
     }).join('');
   }
 
@@ -322,20 +339,19 @@
       '</div></div>';
 
     var list = jobs.length
-      ? jobs.map(function (o) {
-          return '<div class="job' + (o.prov ? ' prov' : '') + '">' +
-            '<div class="j-main">' +
-              '<div class="j-cust">' + esc(o.c || '—') + '</div>' +
-              '<div class="j-name">' + esc(o.j || 'Job') + '</div>' +
-              '<div class="j-meta"><span>Ordered ' + fmtShort(o.d) + '</span>' +
+      ? '<div class="job-table-wrap"><table class="job-table">' +
+        '<thead><tr><th>Customer</th><th>Job name</th><th class="right">PCS</th><th>Due date</th></tr></thead><tbody>' +
+        jobs.map(function (o) {
+          return '<tr' + (o.prov ? ' class="prov"' : '') + '>' +
+            '<td class="j-cust">' + esc(o.c || '—') + '</td>' +
+            '<td class="j-name">' + esc(o.j || 'Job') + '</td>' +
+            '<td class="right j-qty">' + num(o.q) + '</td>' +
+            '<td class="j-due">' + fmtShort(effectiveDue(o)) +
               (o.prov ? '<span class="tag prov">provisional</span>'
-                      : (o.due ? '<span class="tag">due date given</span>'
-                               : '<span class="tag auto">auto +' + state.settings.lead + 'd</span>')) +
-              '</div>' +
-            '</div>' +
-            '<div class="j-qty">' + num(o.q) + '</div>' +
-          '</div>';
-        }).join('')
+                      : (o.due ? '' : '<span class="tag auto">auto +' + state.settings.lead + 'd</span>')) +
+            '</td></tr>';
+        }).join('') +
+        '</tbody></table></div>'
       : '<p class="empty">No jobs due on this day — full capacity available.</p>';
 
     body.innerHTML = head + list;
@@ -390,6 +406,7 @@
       return;
     }
     var today = iso(todayDate());
+    var soonest = earliestStart();
     var dueInput = document.getElementById('chkDue').value;
     var due = dueInput || isoAdd(today, state.settings.lead);
     var limit = state.settings.limit;
@@ -397,7 +414,20 @@
     var free = Math.max(0, limit - load);
     var html = '';
 
-    if (qty <= free) {
+    var bookDate = due;
+    if (due < soonest) {
+      // Too soon to produce, whatever the capacity on that day says.
+      html += '<div class="verdict bad"><div class="v-title">✕ Too soon — ' + fmtShort(due) + ' is inside the ' +
+        state.settings.minLead + '-day production lead</div>' +
+        '<div class="v-line">The earliest we can promise is ' + fmtDate(soonest) + '.</div></div>';
+      var firstFit = earliestDayWithRoom(qty, soonest, 120);
+      bookDate = firstFit || soonest;
+      if (firstFit) {
+        html += '<div class="verdict warn"><div class="v-title">Next available date</div>' +
+          '<div class="v-line">' + fmtDate(firstFit) + ' has ' + num(freeOn(firstFit)) +
+          ' PCS free — the whole order fits there (' + daysBetween(today, firstFit) + ' days out).</div></div>';
+      }
+    } else if (qty <= free) {
       html += '<div class="verdict good"><div class="v-title">✓ Yes — we can take it</div>' +
         '<div class="v-line">' + fmtDate(due) + ' currently holds ' + num(load) + ' PCS. ' +
         'After this order: ' + num(load + qty) + ' / ' + num(limit) + ' PCS, ' +
@@ -410,28 +440,28 @@
         '<div class="v-line">That day already holds ' + num(load) + ' / ' + num(limit) + ' PCS. ' +
         'Only ' + num(free) + ' PCS free — this order is ' + num(over) + ' PCS too many.</div></div>';
 
-      var earliest = earliestDayWithRoom(qty, today, 120);
+      var earliest = earliestDayWithRoom(qty, soonest, 120);
+      if (earliest) bookDate = earliest;
       if (earliest) {
-        html += '<div class="verdict warn"><div class="v-title">Earliest clear day</div>' +
+        html += '<div class="verdict warn"><div class="v-title">Next available date</div>' +
           '<div class="v-line">' + fmtDate(earliest) + ' has ' + num(freeOn(earliest)) +
           ' PCS free — the whole order fits there' +
-          (daysBetween(today, earliest) >= 0 ? ' (' + daysBetween(today, earliest) + ' days out)' : '') +
-          '.</div></div>';
+          ' (' + daysBetween(today, earliest) + ' days out).</div></div>';
       }
-      html += buildSplitPlan(qty, due, today);
+      html += buildSplitPlan(qty, due, soonest);
     }
 
-    html += '<button class="btn ghost sm" id="addProv" data-qty="' + qty + '" data-due="' + due + '">' +
-      '+ Book ' + num(qty) + ' PCS on ' + fmtShort(due) + ' as provisional</button>';
+    html += '<button class="btn ghost sm" id="addProv">' +
+      '+ Book ' + num(qty) + ' PCS on ' + fmtShort(bookDate) + ' as provisional</button>';
     out.innerHTML = html;
 
     var addBtn = document.getElementById('addProv');
     if (addBtn) addBtn.addEventListener('click', function () {
-      addProvisional(qty, due);
+      addProvisional(qty, bookDate);
     });
 
-    state.selected = due;
-    state.view = startOfMonth(fromISO(due));
+    state.selected = bookDate;
+    state.view = startOfMonth(fromISO(bookDate));
     renderCalendar();
     renderDayPanel();
   }
@@ -445,11 +475,11 @@
     return null;
   }
 
-  /** Spread the order across the free capacity between today and the due date. */
-  function buildSplitPlan(qty, due, today) {
-    var start = due < today ? due : today;
-    var span = daysBetween(start, due);
+  /** Spread the order across the free capacity between the first workable day and the due date. */
+  function buildSplitPlan(qty, due, from) {
+    var span = daysBetween(from, due);
     if (span < 0) return '';
+    var start = from;
     var left = qty, rows = '';
     for (var i = 0; i <= span; i++) {
       var d = isoAdd(start, i);
@@ -462,7 +492,7 @@
         WEEKDAYS[fromISO(d).getDay()] + '</span></span><b>' + num(take) + ' PCS</b></div>';
       if (left <= 0) break;
     }
-    if (!rows) rows = '<div class="plan-row short"><span>No free capacity before the due date</span></div>';
+    if (!rows) return '';
     if (left > 0) {
       rows += '<div class="plan-row short"><span>Still unplaced</span><b>' + num(left) + ' PCS</b></div>';
     }
@@ -780,6 +810,7 @@
   function fillSettings() {
     document.getElementById('setLimit').value = state.settings.limit;
     document.getElementById('setLead').value = state.settings.lead;
+    document.getElementById('setMinLead').value = state.settings.minLead;
     document.getElementById('setRest').value = state.settings.rest;
     document.getElementById('setLogo').value = state.settings.logo;
     document.getElementById('setCsv').value = state.settings.csvUrl;
@@ -804,6 +835,8 @@
     var lead = parseInt(document.getElementById('setLead').value, 10);
     state.settings.limit = limit > 0 ? limit : DEFAULTS.limit;
     state.settings.lead = lead >= 0 ? lead : DEFAULTS.lead;
+    var minLead = parseInt(document.getElementById('setMinLead').value, 10);
+    state.settings.minLead = minLead >= 0 ? minLead : DEFAULTS.minLead;
     state.settings.rest = document.getElementById('setRest').value;
     state.settings.logo = document.getElementById('setLogo').value.trim();
     state.settings.csvUrl = document.getElementById('setCsv').value.trim();

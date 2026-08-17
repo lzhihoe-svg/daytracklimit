@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aramega · Daily Quantity Limit Tracker</title>
-<meta name="description" content="Daily production capacity tracker for the Aramega order book — 400 PCS per day.">
+<meta name="description" content="Daily production capacity tracker for the Aramega order book — 450 PCS per day.">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
     </span>
   </div>
   <div class="topbar-actions">
-    <span class="limit-chip" id="limitChip">400 PCS / day</span>
+    <span class="limit-chip" id="limitChip">450 PCS / day</span>
     <button class="btn ghost" id="refreshBtn" title="Reload the order data">
       <span class="rot" id="refreshIcon">⟳</span> Refresh
     </button>
@@ -56,8 +56,20 @@
   </section>
 
   <aside class="side">
-    <section class="panel checker">
-      <div class="panel-head"><h2>Can we take this order?</h2></div>
+    <section class="panel day-panel">
+      <div class="panel-head"><h2 id="dayTitle">Select a day</h2></div>
+      <div id="dayBody" class="day-body">
+        <p class="empty">Click any day in the calendar to see the jobs due that day.</p>
+      </div>
+    </section>
+  </aside>
+
+  <section class="panel checker" id="checker">
+    <div class="panel-head">
+      <h2>Can we take this order?</h2>
+      <span class="muted sm-note">Earliest start is <span id="minLeadNote">3</span> days out, so production has time to run it</span>
+    </div>
+    <div class="checker-body">
       <div class="checker-form">
         <label>Quantity (PCS)
           <input type="number" id="chkQty" min="1" step="1" placeholder="e.g. 120">
@@ -67,16 +79,11 @@
         </label>
         <button class="btn primary" id="chkRun">Check capacity</button>
       </div>
-      <div id="chkResult" class="chk-result"></div>
-    </section>
-
-    <section class="panel day-panel">
-      <div class="panel-head"><h2 id="dayTitle">Select a day</h2></div>
-      <div id="dayBody" class="day-body">
-        <p class="empty">Click any day in the calendar to see the jobs due that day.</p>
+      <div id="chkResult" class="chk-result">
+        <p class="empty">Enter a quantity to see whether the day can carry it.</p>
       </div>
-    </section>
-  </aside>
+    </div>
+  </section>
 
 </main>
 
@@ -116,6 +123,8 @@
     <div class="modal-body">
       <label>Daily limit (PCS)<input type="number" id="setLimit" min="1" step="10"></label>
       <label>Lead time when no due date (days)<input type="number" id="setLead" min="0" step="1"></label>
+      <label>Minimum production lead (days)<input type="number" id="setMinLead" min="0" step="1"></label>
+      <p class="muted sm-note">The soonest a new order can start, so the floor has time to produce it.</p>
       <label>Rest day (excluded when suggesting dates)
         <select id="setRest">
           <option value="">None — we run every day</option>

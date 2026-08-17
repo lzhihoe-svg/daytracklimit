@@ -124,13 +124,14 @@ h3 { font-size: 1.05rem; }
 .layout {
   display: grid; gap: 16px; padding: 18px 22px 26px;
   grid-template-columns: minmax(0, 1fr) 380px;
-  grid-template-areas: "kpis kpis" "cal side";
+  grid-template-areas: "kpis kpis" "cal side" "check check";
   align-items: start;
   max-width: 1560px; margin: 0 auto;
 }
 .kpis { grid-area: kpis; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .calendar-panel { grid-area: cal; }
 .side { grid-area: side; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 78px; }
+.checker { grid-area: check; }
 
 .panel {
   background: var(--surface); border: 1px solid var(--line);
@@ -159,7 +160,14 @@ h3 { font-size: 1.05rem; }
 .kpi .k-label { font-size: 0.76rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .kpi .k-value { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; }
 .kpi .k-value span { font-size: 0.9rem; font-weight: 500; color: var(--muted); }
-.kpi .k-sub { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+.kpi .k-foot { display: flex; align-items: center; gap: 9px; margin-top: 7px; flex-wrap: wrap; }
+.kpi .k-jobs {
+  font-size: 0.76rem; font-weight: 650; padding: 2px 8px; border-radius: 999px;
+  color: var(--lime-text); background: var(--lime-soft);
+  border: 1px solid color-mix(in srgb, var(--lime) 32%, transparent);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.kpi .k-sub { font-size: 0.78rem; color: var(--muted); }
 
 /* ---------- calendar ---------- */
 .cal-nav { display: flex; align-items: center; gap: 8px; }
@@ -199,7 +207,7 @@ h3 { font-size: 1.05rem; }
 }
 .cell .qty { font-size: 1.22rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .cell .qty small { font-size: 0.66rem; font-weight: 500; color: var(--muted); margin-left: 3px; }
-.cell .jobs { font-size: 0.72rem; color: var(--muted); }
+.cell .jobs { font-size: 0.72rem; color: var(--text); opacity: 0.75; font-variant-numeric: tabular-nums; }
 .cell .bar { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: auto; }
 .cell .bar i { display: block; height: 100%; border-radius: 999px; background: var(--lime); }
 .cell.s-free .qty { color: var(--muted); }
@@ -215,7 +223,12 @@ h3 { font-size: 1.05rem; }
 }
 
 /* ---------- checker ---------- */
-.checker-form { padding: 14px 16px; display: grid; gap: 11px; }
+.checker-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: start; }
+.checker-form {
+  padding: 16px; display: grid; gap: 11px; align-content: start;
+  border-right: 1px solid var(--line);
+}
+.checker-form .btn { margin-top: 3px; }
 label { font-size: 0.8rem; font-weight: 560; display: grid; gap: 5px; color: var(--text); }
 input, select, textarea {
   font: inherit; font-size: 0.88rem; padding: 9px 11px; border-radius: var(--radius-sm);
@@ -226,7 +239,13 @@ input:focus, select:focus, textarea:focus {
 }
 textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; resize: vertical; }
 
-.chk-result:not(:empty) { padding: 0 16px 16px; display: grid; gap: 10px; }
+.chk-result { padding: 16px; display: grid; gap: 10px; align-content: start; }
+.chk-result .empty { color: var(--muted); font-size: 0.86rem; margin: 0; padding: 10px 0; }
+@media (min-width: 900px) {
+  .chk-result { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .chk-result > .plan { grid-column: span 1; }
+  .chk-result > .btn { grid-column: 1 / -1; justify-self: start; }
+}
 .verdict {
   border-radius: var(--radius-sm); padding: 12px 13px; border: 1px solid var(--line);
   background: var(--surface-2); display: grid; gap: 4px;
@@ -258,13 +277,23 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
 .day-summary.s-tight .bar i { background: var(--amber); }
 .day-summary.s-over .bar i { background: var(--red); }
 
-.job { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
-.job:last-child { border-bottom: none; }
-.job .j-main { min-width: 0; flex: 1; }
-.job .j-cust { font-size: 0.78rem; color: var(--lime-text); font-weight: 650; }
-.job .j-name { font-size: 0.84rem; margin-top: 1px; overflow-wrap: anywhere; }
-.job .j-meta { font-size: 0.72rem; color: var(--muted); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.job .j-qty { font-size: 1rem; font-weight: 700; white-space: nowrap; }
+.job-table-wrap { overflow-x: auto; }
+.job-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.job-table th {
+  text-align: left; font-size: 0.68rem; font-weight: 620; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted); padding: 8px 10px; white-space: nowrap;
+  border-bottom: 1px solid var(--line); background: var(--surface-2);
+  position: sticky; top: 0; z-index: 1;
+}
+.job-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.job-table tr:last-child td { border-bottom: none; }
+.job-table .right { text-align: right; }
+.job-table .j-cust { color: var(--lime-text); font-weight: 650; white-space: nowrap; }
+.job-table .j-name { overflow-wrap: anywhere; min-width: 150px; }
+.job-table .j-qty { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.job-table .j-due { white-space: nowrap; color: var(--muted); }
+.job-table .j-due .tag { margin-left: 5px; }
+.job-table tr.prov { background: color-mix(in srgb, var(--lime) 7%, transparent); }
 .tag { font-size: 0.66rem; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); }
 .tag.auto { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
 .tag.prov { color: var(--lime-text); border-color: color-mix(in srgb, var(--lime) 45%, var(--line)); }
@@ -332,7 +361,9 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
 
 /* ---------- responsive ---------- */
 @media (max-width: 1140px) {
-  .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "kpis" "cal" "side"; }
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "kpis" "cal" "side" "check"; }
+  .checker-body { grid-template-columns: minmax(0, 1fr); }
+  .checker-form { border-right: none; border-bottom: 1px solid var(--line); }
   .side { position: static; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -347,12 +378,12 @@ textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.
   .kpis { grid-template-columns: minmax(0, 1fr); }
   .cell { min-height: 74px; padding: 5px 4px; gap: 2px; }
   .cell .qty { font-size: 0.86rem; }
+  .cell .jobs { font-size: 0.64rem; }
   .cell .qty small { display: none; }
   .cell .dnum { width: 18px; height: 18px; font-size: 0.7rem; }
   .cell .over-tag { font-size: 0.6rem; padding: 0 3px; }
   .calendar { gap: 4px; padding: 4px 8px 12px; }
   .weekhead { padding: 8px 8px 4px; font-size: 0.64rem; }
-  .cell .jobs { display: none; }
   .brand-text small { display: none; }
   .legend { display: none; }
   .cal-nav h2 { min-width: 110px; font-size: 0.9rem; }
