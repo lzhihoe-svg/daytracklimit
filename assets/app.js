@@ -399,6 +399,12 @@
 
   /* ---------------- capacity checker ---------------- */
 
+  /**
+   * A due date is a deadline, not a slot: the job only has to be FINISHED by
+   * then, so it may run on any day from the first workable day up to the due
+   * date. The check is therefore "is there room anywhere in that window", not
+   * "is there room on the due date itself".
+   */
   function runCheck() {
     var qty = parseInt(document.getElementById('chkQty').value, 10);
     var out = document.getElementById('chkResult');
@@ -411,96 +417,122 @@
     var soonest = earliestStart();
     var dueInput = document.getElementById('chkDue').value;
     var due = dueInput || isoAdd(today, state.settings.lead);
-    var limit = state.settings.limit;
-    var load = dayLoad(due);
-    var free = Math.max(0, limit - load);
+    var minLead = state.settings.minLead;
     var html = '';
+    var plan = null;
 
-    var bookDate = due;
     if (due < soonest) {
-      // Too soon to produce, whatever the capacity on that day says.
-      html += '<div class="verdict bad"><div class="v-title">✕ Too soon — ' + fmtShort(due) + ' is inside the ' +
-        state.settings.minLead + '-day production lead</div>' +
-        '<div class="v-line">The earliest we can promise is ' + fmtDate(soonest) + '.</div></div>';
-      var firstFit = earliestDayWithRoom(qty, soonest, 120);
-      bookDate = firstFit || soonest;
-      if (firstFit) {
-        html += '<div class="verdict warn"><div class="v-title">Next available date</div>' +
-          '<div class="v-line">' + fmtDate(firstFit) + ' has ' + num(freeOn(firstFit)) +
-          ' PCS free — the whole order fits there (' + daysBetween(today, firstFit) + ' days out).</div></div>';
-      }
-    } else if (qty <= free) {
-      html += '<div class="verdict good"><div class="v-title">✓ Yes — we can take it</div>' +
-        '<div class="v-line">' + fmtDate(due) + ' currently holds ' + num(load) + ' PCS. ' +
-        'After this order: ' + num(load + qty) + ' / ' + num(limit) + ' PCS, ' +
-        num(free - qty) + ' PCS still free.</div>' +
-        (dueInput ? '' : '<div class="v-line">No due date given, so this uses the ' + state.settings.lead + '-day default.</div>') +
-        '</div>';
+      // The deadline itself is inside the production lead — nothing to schedule.
+      var soonestDeadline = earliestDeadline(qty, soonest);
+      var away = daysBetween(today, due);
+      html += verdict('bad', '✕ Not by ' + fmtShort(due),
+        [away < 0 ? 'That date has already passed.'
+                  : (away === 0 ? 'That is today, and we need at least ' + minLead + ' days.'
+                                : 'That is ' + away + ' day' + (away === 1 ? '' : 's') +
+                                  ' away and we need at least ' + minLead + '.'),
+         soonestDeadline
+           ? 'The soonest we can finish ' + num(qty) + ' PCS is ' + fmtDate(soonestDeadline) + '.'
+           : 'No capacity for this quantity in the months ahead.']);
+      if (soonestDeadline) plan = capacityPlan(qty, soonest, soonestDeadline);
     } else {
-      var over = qty - free;
-      html += '<div class="verdict bad"><div class="v-title">✕ Not on ' + fmtShort(due) + '</div>' +
-        '<div class="v-line">That day already holds ' + num(load) + ' / ' + num(limit) + ' PCS. ' +
-        'Only ' + num(free) + ' PCS free — this order is ' + num(over) + ' PCS too many.</div></div>';
-
-      var earliest = earliestDayWithRoom(qty, soonest, 120);
-      if (earliest) bookDate = earliest;
-      if (earliest) {
-        html += '<div class="verdict warn"><div class="v-title">Next available date</div>' +
-          '<div class="v-line">' + fmtDate(earliest) + ' has ' + num(freeOn(earliest)) +
-          ' PCS free — the whole order fits there' +
-          ' (' + daysBetween(today, earliest) + ' days out).</div></div>';
+      plan = capacityPlan(qty, soonest, due);
+      if (plan.short === 0 && plan.rows.length === 1) {
+        var only = plan.rows[0];
+        var buffer = daysBetween(only.day, due);
+        html += verdict('good', '✓ Yes — we can meet ' + fmtShort(due),
+          ['Run it on ' + fmtDate(only.day) + ', which has ' + num(freeOn(only.day)) + ' PCS free.',
+           buffer > 0
+             ? buffer + ' day' + (buffer === 1 ? '' : 's') + ' of buffer before the deadline.'
+             : 'That is the deadline itself — no buffer.',
+           dueInput ? '' : 'No due date given, so this uses the ' + state.settings.lead + '-day default.']);
+      } else if (plan.short === 0) {
+        html += verdict('good', '✓ Yes — we can meet ' + fmtShort(due),
+          ['It does not fit in one day, so it runs across ' + plan.rows.length + ' days before the deadline.',
+           dueInput ? '' : 'No due date given, so this uses the ' + state.settings.lead + '-day default.']);
+      } else {
+        var reachable = earliestDeadline(qty, soonest);
+        html += verdict('bad', '✕ Not by ' + fmtShort(due),
+          ['Only ' + num(qty - plan.short) + ' of ' + num(qty) + ' PCS can be made by then — ' +
+            num(plan.short) + ' PCS short.',
+           reachable
+             ? 'The whole order can be finished by ' + fmtDate(reachable) + '.'
+             : 'No capacity for this quantity in the months ahead.']);
+        if (reachable) plan = capacityPlan(qty, soonest, reachable);
       }
-      html += buildSplitPlan(qty, due, soonest);
     }
 
-    html += '<button class="btn ghost sm" id="addProv">' +
-      '+ Book ' + num(qty) + ' PCS on ' + fmtShort(bookDate) + ' as provisional</button>';
+    if (plan && plan.rows.length) {
+      html += renderPlan(plan);
+      html += '<button class="btn ghost sm" id="addProv">+ Book ' + num(qty) + ' PCS as provisional' +
+        (plan.rows.length > 1 ? ' across these ' + plan.rows.length + ' days' : ' on ' + fmtShort(plan.rows[0].day)) +
+        '</button>';
+    }
     out.innerHTML = html;
 
     var addBtn = document.getElementById('addProv');
     if (addBtn) addBtn.addEventListener('click', function () {
-      addProvisional(qty, bookDate);
+      plan.rows.forEach(function (r) { addProvisional(r.qty, r.day); });
     });
 
-    state.selected = bookDate;
-    state.view = startOfMonth(fromISO(bookDate));
+    if (plan && plan.rows.length) {
+      var last = plan.rows[plan.rows.length - 1].day;
+      state.selected = last;
+      state.view = startOfMonth(fromISO(last));
+    }
     renderCalendar();
     renderDayPanel();
   }
 
-  function earliestDayWithRoom(qty, fromDay, horizon) {
-    for (var i = 0; i < horizon; i++) {
-      var d = isoAdd(fromDay, i);
-      if (isRestDay(d)) continue;
-      if (freeOn(d) >= qty) return d;
-    }
-    return null;
+  function verdict(tone, title, lines) {
+    return '<div class="verdict ' + tone + '"><div class="v-title">' + title + '</div>' +
+      lines.filter(Boolean).map(function (l) { return '<div class="v-line">' + l + '</div>'; }).join('') +
+      '</div>';
   }
 
-  /** Spread the order across the free capacity between the first workable day and the due date. */
-  function buildSplitPlan(qty, due, from) {
-    var span = daysBetween(from, due);
-    if (span < 0) return '';
-    var start = from;
-    var left = qty, rows = '';
-    for (var i = 0; i <= span; i++) {
-      var d = isoAdd(start, i);
+  /**
+   * Fill the order into the free capacity between two dates, earliest day
+   * first so the job finishes with buffer before the deadline.
+   */
+  function capacityPlan(qty, from, to) {
+    var rows = [], left = qty;
+    var span = daysBetween(from, to);
+    for (var i = 0; i <= span && left > 0; i++) {
+      var d = isoAdd(from, i);
       if (isRestDay(d)) continue;
       var free = freeOn(d);
       if (free <= 0) continue;
       var take = Math.min(free, left);
       left -= take;
-      rows += '<div class="plan-row"><span>' + fmtShort(d) + ' <span class="muted">' +
-        WEEKDAYS[fromISO(d).getDay()] + '</span></span><b>' + num(take) + ' PCS</b></div>';
-      if (left <= 0) break;
+      rows.push({ day: d, qty: take });
     }
-    if (!rows) return '';
-    if (left > 0) {
-      rows += '<div class="plan-row short"><span>Still unplaced</span><b>' + num(left) + ' PCS</b></div>';
+    return { rows: rows, short: left, deadline: to };
+  }
+
+  /** The soonest date by which the whole quantity can be finished. */
+  function earliestDeadline(qty, from, horizon) {
+    var left = qty;
+    for (var i = 0; i < (horizon || 180); i++) {
+      var d = isoAdd(from, i);
+      if (isRestDay(d)) continue;
+      left -= freeOn(d);
+      if (left <= 0) return d;
     }
-    return '<div class="plan"><div class="plan-head">' +
-      (left > 0 ? 'Best we can fit before ' + fmtShort(due) : 'Split it across these days to hit ' + fmtShort(due)) +
-      '</div>' + rows + '</div>';
+    return null;
+  }
+
+  function renderPlan(plan) {
+    var head = plan.rows.length === 1
+      ? 'Production day'
+      : 'Runs across ' + plan.rows.length + ' days, finishing ' + fmtShort(plan.rows[plan.rows.length - 1].day);
+    var rows = plan.rows.map(function (r) {
+      return '<div class="plan-row"><span>' + fmtShort(r.day) + ' <span class="muted">' +
+        WEEKDAYS[fromISO(r.day).getDay()] + '</span></span><b>' + num(r.qty) + ' PCS</b></div>';
+    }).join('');
+    if (plan.short > 0) {
+      rows += '<div class="plan-row short"><span>Cannot be placed by ' + fmtShort(plan.deadline) + '</span>' +
+        '<b>' + num(plan.short) + ' PCS</b></div>';
+    }
+    return '<div class="plan"><div class="plan-head">' + head + '</div>' + rows + '</div>';
   }
 
   function addProvisional(qty, due) {

@@ -34,10 +34,13 @@ month the board starts from.
 * **KPI strip** — today's load, the next 7 days against capacity, how many of the next
   30 days are over the limit, and the open pipeline; each carries its job count.
 * **"Can we take this order?"** (foot of the page) — enter a quantity and (optionally) a
-  due date. The app answers yes/no, names the next available date, and proposes a split
-  across the free capacity before the due date. Nothing is offered sooner than the
-  minimum production lead (3 days), so the floor has time to run it. The order can be
-  pinned to the calendar as a *provisional* booking while the customer decides.
+  due date. The due date is treated as a deadline: the job may run on any day from the
+  first workable day (today plus the 3-day production lead) up to that date, so a full
+  due date is not a refusal as long as there is room before it. The answer names the
+  production day, or the days it splits across, and says how much buffer is left. When
+  the deadline genuinely cannot be met it says how many pieces fall short and the
+  soonest date the whole order can be finished. Either way it can be pinned to the
+  calendar as a *provisional* booking while the customer decides.
 * **Refresh** — recomputes everything against the current date, and pulls the latest rows
   straight from the sheet when a published CSV link is set (Settings → Live sheet CSV link;
   in Sheets: *File → Share → Publish to web*, pick the month's tab, choose CSV). Incoming
