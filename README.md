@@ -47,10 +47,17 @@ month the board starts from.
   how far over the limit the board runs, and the share of orders with no due date in the
   sheet. Two charts sit beside them: average load by weekday against the daily limit, and
   the busiest customers by share of pieces.
-* **Refresh** — recomputes everything against the current date, and pulls the latest rows
-  straight from the sheet when a published CSV link is set (Settings → Live sheet CSV link;
-  in Sheets: *File → Share → Publish to web*, pick the month's tab, choose CSV). Incoming
-  rows replace only the dates they cover, so earlier months stay intact.
+* **Refresh** — recomputes everything against the current date and reads the order book
+  itself, from whichever source the copy can reach:
+  1. the viewer's **Google Drive connector**, on the hosted copy — it exports the sheet's
+     first tab (the current month) as CSV, so the private sheet needs no publishing. The
+     board also reads it once on open;
+  2. a **published CSV link** (Settings → Live sheet CSV link; in Sheets: *File → Share →
+     Publish to web*, pick the month's tab, choose CSV), for a self-hosted copy;
+  3. neither — it recalculates the day and says so.
+
+  Incoming rows replace only the dates they cover, so earlier months stay intact. Each
+  connector failure reports its own fix (reconnect, add the connector, choose one, retry).
 * **Update data** — paste rows copied straight out of Google Sheets (or upload a CSV/TSV
   export) to refresh the numbers; kept in the browser's local storage.
 * **Export month CSV** — the day-by-day load for the month on screen.
@@ -112,6 +119,7 @@ A published copy lives at <https://claude.ai/code/artifact/db11c85a-d0e0-4495-b7
 `python3 tools/build_artifact.py`; `python3 tools/build_single.py` produces a
 standalone `dist/tracker.html` that runs from anywhere.
 
-The hosted copy blocks outbound requests, so the live CSV link works in the self-hosted
-version (GitHub Pages, a local server, `dist/tracker.html`); on the hosted copy, Refresh
-recomputes the day and **Update data** takes a paste.
+The hosted copy blocks outbound `fetch`, so the published-CSV link is for the self-hosted
+version (GitHub Pages, a local server, `dist/tracker.html`). The hosted copy instead reads
+the sheet through the viewer's Google Drive connector, declared as the `mcp` capability at
+publish time — which means that copy is viewer-consented and cannot be shared publicly.

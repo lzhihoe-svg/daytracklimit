@@ -572,9 +572,9 @@
   function renderFooter() {
     var data = activeData();
     var count = allOrders().length - state.provisional.length;
+    var live = { 'Google Drive': 'Live from the order book', 'live sheet link': 'Live sheet link' };
     var note = state.dataset
-      ? (state.dataset.source === 'live sheet link' ? 'Live sheet link' : 'Your imported data') +
-        ' · ' + num(count) + ' orders'
+      ? (live[state.dataset.source] || 'Your imported data') + ' · ' + num(count) + ' orders'
       : 'Snapshot of ' + (data.source || 'order book') +
         (data.generatedAt ? ' · pulled ' + fmtDate(data.generatedAt.slice(0, 10)) : '') +
         ' · ' + num(count) + ' orders';
@@ -908,52 +908,142 @@
     document.getElementById('refreshBtn').disabled = !!on;
   }
 
-  /**
-   * Recompute everything against the current date, and — when a published
-   * sheet link is set — pull the latest rows from it first.
-   */
-  function refresh() {
-    var url = state.settings.csvUrl;
-    if (!url) {
-      state.lastRefresh = new Date();
-      renderAll();
-      toast('Refreshed · showing ' + fmtDate(iso(todayDate())));
-      return;
+  var DRIVE_SERVER = 'Google Drive';
+
+  /** The connector namespace, or null when this view cannot reach connectors. */
+  function driveClient() {
+    if (!window.claude || typeof window.claude.use !== 'function') return Promise.resolve(null);
+    return window.claude.use('mcp').catch(function () { return null; });
+  }
+
+  function decodeSheet(payload) {
+    var raw = payload;
+    if (raw && typeof raw === 'object') raw = raw.content || raw.data || raw.text;
+    if (typeof raw !== 'string' || !raw) return null;
+    try {
+      var bin = atob(raw.replace(/\s/g, ''));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch (e) {
+      return raw;   // already plain text
     }
-    spin(true);
+  }
+
+  /** Export the order book's current month tab as CSV through the viewer's connector. */
+  function pullFromDrive(mcp, isRetry) {
+    return mcp.callTool(DRIVE_SERVER, 'download_file_content', {
+      fileId: BUNDLED.sheetId,
+      exportMimeType: 'text/csv'
+    }).then(function (res) {
+      var text = decodeSheet(res && res.payload);
+      if (!text) throw { code: 'tool_error', message: 'Google Drive returned no file content' };
+      return text;
+    }, function (err) {
+      // One retry, only for the codes the runtime marks as transient.
+      if (!isRetry && err && err.retryable) {
+        return new Promise(function (go) {
+          setTimeout(go, Math.min(err.retryAfterMs || 1200, 5000) + Math.floor(Math.random() * 400));
+        }).then(function () { return pullFromDrive(mcp, true); });
+      }
+      throw err;
+    });
+  }
+
+  /** Each failure code has its own fix — say which one applies. */
+  function driveErrorMessage(err) {
+    var code = err && err.code;
+    if (code === 'needs_reauth') {
+      return 'Google Drive needs reconnecting — claude.ai Settings → Connectors. Showing the last data.';
+    }
+    if (code === 'server_not_connected') {
+      return 'No Google Drive connector on this account — add it in claude.ai Settings → Connectors, or paste the rows with Update data.';
+    }
+    if (code === 'selection_required') {
+      return 'More than one Google Drive connector — pick one when claude.ai asks, then refresh again.';
+    }
+    if (code === 'blocked_by_policy' || code === 'approval_required' || code === 'not_in_manifest') {
+      return 'This copy is not allowed to read the sheet directly. Use Update data to paste the rows.';
+    }
+    if (code === 'server_unavailable') {
+      return 'Google Drive did not answer. The board still shows the last data — try again shortly.';
+    }
+    if (code === 'tool_error') {
+      return 'Google Drive could not read the order book: ' + (err.message || 'no reason given') + '.';
+    }
+    return 'Could not read the order book' + (err && err.message ? ': ' + err.message : '') +
+      '. Use Update data to paste the rows instead.';
+  }
+
+  /** Fold freshly read sheet rows into the board. */
+  function applySheetText(text, sourceLabel, quiet) {
+    if (/^\s*</.test(text)) throw new Error('that link returned a web page, not CSV');
+    var parsed = parseSheetText(text);
+    if (!parsed.orders.length) throw new Error('no order rows found in the sheet');
+    var merged = mergeByDateRange(activeData().orders, parsed.orders);
+    state.dataset = {
+      source: sourceLabel,
+      sheetId: BUNDLED.sheetId,
+      generatedAt: new Date().toISOString(),
+      orders: merged.orders
+    };
+    state.lastRefresh = new Date();
+    save();
+    renderAll();
+    if (!quiet) {
+      // Only count kept orders the board actually shows — closed months are out of view.
+      var from = windowStart();
+      var keptInView = merged.orders.filter(function (o) {
+        return (!from || o.d >= from) && (o.d < merged.from || o.d > merged.to);
+      }).length;
+      toast('Updated from the order book · ' + num(parsed.orders.length) + ' orders for ' +
+        fmtShort(merged.from) + ' – ' + fmtShort(merged.to) +
+        (keptInView ? ' · ' + num(keptInView) + ' earlier orders kept' : ''));
+    }
+  }
+
+  function pullFromLink(url) {
     var bust = url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now();
-    fetch(bust, { cache: 'no-store' })
+    return fetch(bust, { cache: 'no-store' })
       .then(function (res) {
-        if (!res.ok) throw new Error('The sheet link returned ' + res.status);
+        if (!res.ok) throw new Error('the sheet link returned ' + res.status);
         return res.text();
       })
-      .then(function (text) {
-        if (/^\s*</.test(text)) {
-          throw new Error('That link returned a web page, not CSV — republish it as CSV');
-        }
-        var parsed = parseSheetText(text);
-        if (!parsed.orders.length) {
-          throw new Error('No order rows found — check the published tab and its columns');
-        }
-        var merged = mergeByDateRange(activeData().orders, parsed.orders);
-        state.dataset = {
-          source: 'live sheet link',
-          sheetId: BUNDLED.sheetId,
-          generatedAt: new Date().toISOString(),
-          orders: merged.orders
-        };
-        state.lastRefresh = new Date();
-        save();
-        renderAll();
-        toast('Updated from the sheet · ' + num(parsed.orders.length) + ' orders for ' +
-          fmtShort(merged.from) + ' – ' + fmtShort(merged.to) +
-          (merged.kept ? ' · ' + num(merged.kept) + ' earlier orders kept' : ''));
-      })
+      .then(function (text) { applySheetText(text, 'live sheet link'); })
       .catch(function (err) {
         renderAll();
-        toast('Could not reach the sheet: ' + err.message + '. Use Update data to paste the rows instead.', 'bad');
-      })
-      .then(function () { spin(false); });
+        toast('Could not reach the sheet: ' + err.message +
+          '. Use Update data to paste the rows instead.', 'bad');
+      });
+  }
+
+  /**
+   * Recompute everything against the current date, and read the order book
+   * itself when this view can — through the viewer's Google Drive connector
+   * first, then a published CSV link.
+   */
+  function refresh(quiet) {
+    spin(true);
+    return driveClient().then(function (mcp) {
+      if (mcp) {
+        return pullFromDrive(mcp, false)
+          .then(function (text) { applySheetText(text, 'Google Drive', quiet); })
+          .catch(function (err) {
+            renderAll();
+            if (!quiet || (err && err.code !== 'server_not_connected')) {
+              toast(driveErrorMessage(err), 'bad');
+            }
+          });
+      }
+      if (state.settings.csvUrl) return pullFromLink(state.settings.csvUrl);
+      state.lastRefresh = new Date();
+      renderAll();
+      if (!quiet) {
+        toast('Recalculated for ' + fmtDate(iso(todayDate())) +
+          '. Nothing is linked to the order book yet — add the sheet link in Settings, ' +
+          'or paste the rows with Update data.');
+      }
+    }).then(function () { spin(false); }, function () { spin(false); });
   }
 
   /**
@@ -1117,7 +1207,8 @@
       applyTheme();
     });
     document.getElementById('exportBtn').addEventListener('click', exportMonthCSV);
-    document.getElementById('refreshBtn').addEventListener('click', refresh);
+    // Wrapped: a bare listener would hand the click event in as `quiet`.
+    document.getElementById('refreshBtn').addEventListener('click', function () { refresh(false); });
 
     document.getElementById('importBtn').addEventListener('click', function () { openModal('importModal'); });
     document.getElementById('settingsBtn').addEventListener('click', function () {
@@ -1155,6 +1246,7 @@
     renderAll();
     initChartTips();
     watchDayRollover();
+    refresh(true);   // quiet first read, so the board opens on live numbers
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
